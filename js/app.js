@@ -530,13 +530,15 @@
                     state.bnbBalance = '0.000000';
                     updateWalletInfoUI();
                     updateStatus('⚡ Wallet disconnected.', 'info');
-                } else {
+                } else if (state.walletAddress !== accounts[0]) {
                     connectWallet();
                 }
             });
 
-            window.ethereum.on('chainChanged', function () {
-                window.location.reload();
+            window.ethereum.on('chainChanged', function (newChainId) {
+                if (newChainId === CONFIG.CHAIN_ID && state.walletAddress) {
+                    connectWallet();
+                }
             });
         }
     }
