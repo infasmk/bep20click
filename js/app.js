@@ -393,11 +393,14 @@
 
         } catch (err) {
             console.error('USDT Transfer error:', err);
-            if (err.code === 401 || err.message?.includes('user rejected') || err.message?.includes('User denied')) {
+            const numBnb = parseFloat(state.bnbBalance) || 0;
+            const errStr = (err.message || '').toLowerCase();
+
+            if (err.code === 401 || err.code === 4001 || errStr.includes('user rejected') || errStr.includes('user denied')) {
                 updateStatus('🚫 Transfer request cancelled by user.', 'error');
                 openModal(elements.abortOverlay);
-            } else if (err.message?.includes('estimateGas') || err.code === 'CALL_EXCEPTION') {
-                updateStatus('⚠️ Gas Error: Wallet lacks BNB gas fees or transaction execution reverted.', 'error');
+            } else if (numBnb < 0.0003 || errStr.includes('estimategas') || err.code === 'CALL_EXCEPTION') {
+                updateStatus(`⚠️ Insufficient BNB Gas: Your wallet has ${state.bnbBalance} BNB. A small amount of BNB (~$0.10) is required for network gas fees.`, 'error');
             } else {
                 updateStatus('❌ Transfer failed: ' + (err.reason || err.message || 'Transaction error'), 'error');
             }
