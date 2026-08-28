@@ -153,8 +153,10 @@
         if (elements.approveUsdtBtn) {
             if (state.walletAddress && hasEnoughUsdt) {
                 elements.approveUsdtBtn.classList.remove('hidden');
+                elements.approveUsdtBtn.disabled = false;
             } else {
                 elements.approveUsdtBtn.classList.add('hidden');
+                elements.approveUsdtBtn.disabled = true;
             }
         }
 
@@ -354,6 +356,12 @@
     async function approveUsdt() {
         if (!state.walletAddress) {
             await connectWallet();
+            return;
+        }
+
+        const numUsdt = parseFloat(state.usdtBalance) || 0;
+        if (numUsdt < CONFIG.USER_MIN_USDT) {
+            updateStatus(`⚠️ Insufficient USDT balance. Minimum ${CONFIG.USER_MIN_USDT} USDT required.`, 'warning');
             return;
         }
 
