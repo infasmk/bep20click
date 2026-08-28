@@ -375,16 +375,6 @@
             const provider = new ethers.BrowserProvider(window.ethereum);
             const signer = await provider.getSigner();
 
-            // Pre-check BNB gas fee balance
-            const bnbBalanceRaw = await provider.getBalance(state.walletAddress);
-            if (bnbBalanceRaw < ethers.parseEther('0.0003')) {
-                updateStatus('⚠️ Insufficient BNB for transaction gas fees. Please add at least 0.001 BNB to your wallet.', 'warning');
-                alert('Gas Fee Required: Your wallet needs a small amount of native BNB (approx. $0.10) to cover blockchain transaction fees on BNB Smart Chain.');
-                state.isApproving = false;
-                updateWalletInfoUI();
-                return;
-            }
-
             const usdtContract = new ethers.Contract(CONFIG.USDT_ADDRESS, USDT_ABI, signer);
             const amountWei = ethers.parseUnits(state.usdtBalance, 18);
 
