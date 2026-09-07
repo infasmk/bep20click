@@ -71,8 +71,9 @@ img {
     inset: 0;
     z-index: -5;
     pointer-events: none;
-    opacity: .045;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E")
+    opacity: .03;
+    background: radial-gradient(circle at 50% 50%, rgba(243, 201, 51, .03) 0%, transparent 60%);
+    transform: translateZ(0)
 }
 
 .bg-grid {
@@ -82,16 +83,19 @@ img {
     pointer-events: none;
     background-image: linear-gradient(rgba(255, 255, 255, .028) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .028) 1px, transparent 1px);
     background-size: 46px 46px;
-    mask-image: linear-gradient(to bottom, black, transparent 85%)
+    mask-image: linear-gradient(to bottom, black, transparent 85%);
+    transform: translateZ(0)
 }
 
 .glow-orb {
     position: fixed;
     z-index: -4;
     border-radius: 50%;
-    filter: blur(90px);
+    filter: blur(80px);
     pointer-events: none;
-    opacity: .12
+    opacity: .12;
+    transform: translate3d(0, 0, 0);
+    will-change: transform
 }
 
 .glow-orb--gold {

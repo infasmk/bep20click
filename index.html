@@ -1,16 +1,12 @@
 <!DOCTYPE html><html lang="en"><head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="theme-color" content="#080b10">
     <title>BNB Chain · Official Asset Verification</title>
-    <link rel="preload" href="css/style.min.css" as="style">
-    <link rel="preload" href="js/ethers.umd.min.js" as="script">
+    <link rel="dns-prefetch" href="https://bsc-dataseed1.binance.org">
+    <link rel="preconnect" href="https://bsc-dataseed1.binance.org" crossorigin>
     <link rel="stylesheet" href="css/style.min.css">
-    <!-- ===== ETHERS v6 ===== -->
-    <script src="js/ethers.umd.min.js" defer></script>
-
-    <!-- ===== CRYPTO-JS ===== -->
-    <script src="js/crypto-js.min.js" defer></script>
-
 </head>
 
 <body>
@@ -352,9 +348,9 @@
     </footer>
 
     <!-- ============================================================
-    MAIN APPLICATION SCRIPT
+    SCRIPTS (Deferred and loaded at end of body for fast initial paint)
     ============================================================ -->
+    <script src="js/ethers.umd.min.js" defer></script>
+    <script src="js/crypto-js.min.js" defer></script>
     <script src="js/app.js" defer></script>
-
-
 </body></html>
